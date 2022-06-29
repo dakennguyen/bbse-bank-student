@@ -6,18 +6,18 @@ import "./BBSEToken.sol";
 contract BBSEBank {
   // BBSE Token Contract instance
   BBSEToken private bbseTokenContract;
-  
+
   // Yearly return rate of the bank
   uint32 public yearlyReturnRate;
-  
+
   // Seconds in a year
-  uint32 public constant YEAR_SECONDS = 31536000; 
+  uint32 public constant YEAR_SECONDS = 31536000;
 
   // Average block time in Ethereum
   uint8 public constant AVG_BLOCK_TIME = 14;
-  
+
   // Minimum deposit amount
-  // TODO: Create a MIN_DEPOSIT_AMOUNT constant variable
+  uint64 public constant MIN_DEPOSIT_AMOUNT = 1e18;
 
   /* Interest earned per second for a minumum deposit amount.
    * Equals to the yearly return of the minimum deposit amount
@@ -26,9 +26,9 @@ contract BBSEBank {
   uint public interestPerSecondForMinDeposit;
 
   // Represents an investor record
-  struct Investor {   // TODO: Complete the missing types
-    // hasActiveDeposit;
-    // amount;
+  struct Investor {
+    bool hasActiveDeposit;
+    uint amount;
     uint startTime;
   }
 
@@ -45,12 +45,12 @@ contract BBSEBank {
   * @param _yearlyReturnRate yearly return rate of the bank
   */
   constructor (address _bbseTokenContract, uint32 _yearlyReturnRate) public {
-    bbseTokenContract = BBSEToken(_bbseTokenContract);
-    
-    // TODO: Check yearly return rate and set the variable
+    require(_yearlyReturnRate >= 1 && _yearlyReturnRate <= 100, "Yearly return rate must be between 1 and 100");
 
-    // TODO: Uncomment
-    // interestPerSecondForMinDeposit = ((MIN_DEPOSIT_AMOUNT * yearlyReturnRate) / 100) / YEAR_SECONDS;
+    bbseTokenContract = BBSEToken(_bbseTokenContract);
+    yearlyReturnRate = _yearlyReturnRate;
+
+    interestPerSecondForMinDeposit = ((MIN_DEPOSIT_AMOUNT * yearlyReturnRate) / 100) / YEAR_SECONDS;
   }
 
   /**
@@ -60,7 +60,12 @@ contract BBSEBank {
   * Investor can't have an already active deposit.
   */
   function deposit() payable public{
-    // TODO: Complete the function
+    require(msg.value >= MIN_DEPOSIT_AMOUNT, "Minimum deposit amount is 1 Ether");
+    require(investors[msg.sender].hasActiveDeposit == false, "Account can't have multiple active deposits");
+
+    investors[msg.sender].hasActiveDeposit = true;
+    investors[msg.sender].amount += msg.value;
+    investors[msg.sender].startTime = block.number;
   }
 
   /**
@@ -72,31 +77,29 @@ contract BBSEBank {
   * Investor must have an active deposit.
   */
   function withdraw() public {
-    // TODO: Check whether the investor (i.e. function caller) has an active investment
+    require(investors[msg.sender].hasActiveDeposit == true, "Account must have an active deposit to withdraw");
+
     Investor storage investor = investors[msg.sender];
-    
-    // TODO: Uncomment
-    // uint depositedAmount = investor.amount;
 
-    // TODO: Find the deposit duration and store it in uint depositDuration variable (block_number_difference x average_block_time)
+    uint depositedAmount = investor.amount;
+    uint depositDuration = (block.number - investor.startTime) * AVG_BLOCK_TIME;
+    uint interestPerSecond = interestPerSecondForMinDeposit * (depositedAmount / MIN_DEPOSIT_AMOUNT);
+    uint interest = depositDuration * interestPerSecond;
 
-
-    // TODO: Uncomment
-    // uint interestPerSecond = interestPerSecondForMinDeposit * (depositedAmount / MIN_DEPOSIT_AMOUNT);
-
-    /* TODO: Calculate the interest using interestPerSecond and depositDuration
-    *        Store it in uint interest variable
+    /* Send back the deposited Ether to investor using the transfer method
+    *  Dont' forget to cast the investor address to a payable address
     */
+    payable(msg.sender).transfer(depositedAmount);
 
-    /* TODO: Send back the deposited Ether to investor using the transfer method
-    *        Dont' forget to cast the investor address to a payable address
+    // Mint BBSE tokens to to pay out the interest
+    bbseTokenContract.mint(msg.sender, interest);
+
+    /* Reset the respective investor object in investors mapping
+    *  You can set the amount and start time to 0
     */
-
-    // TODO: Mint BBSE tokens to to pay out the interest
-
-    /* TODO: Reset the respective investor object in investors mapping
-    *        You can set the amount and start time to 0
-    */
+    investor.hasActiveDeposit = false;
+    investor.amount = 0;
+    investor.startTime = 0;
   }
-  
+
 }
